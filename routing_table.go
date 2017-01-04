@@ -8,6 +8,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/nictuku/nettools"
+	"container/list"
 )
 
 func newRoutingTable(maxData int,p *peerStore) *routingTable {
@@ -15,9 +16,11 @@ func newRoutingTable(maxData int,p *peerStore) *routingTable {
 		&nTree{},
 		make(map[string]*remoteNode),
 		NewCache(maxData),
+		list.New(),
 		"",
 		nil,
 		0,
+		maxData,
 	}
 	result.registerLruCacheCallback(p)
 
@@ -32,12 +35,14 @@ type routingTable struct {
 	// as a key.
 	addressesMap map[string]*remoteNode
 	addresses *Cache
+	lc *list.List
 
 	// Neighborhood.
 	nodeId       string // This shouldn't be here. Move neighborhood upkeep one level up?
 	boundaryNode *remoteNode
 	// How many prefix bits are shared between boundaryNode and nodeId.
 	proximity int
+	maxData int
 }
 func (r *routingTable) registerLruCacheCallback(p *peerStore){
 	r.addresses.OnEvicted = func(key CacheKey,v interface{}){
@@ -156,6 +161,14 @@ func (r *routingTable) insert(node *remoteNode, proto string) error {
 	}
 	r.addresses.Add(addr,node)
 	r.addressesMap[addr] = node
+
+	if r.lc.Len() >= r.maxData{
+		e := r.lc.Front();
+		if e != nil{
+			r.lc.Remove(e)
+		}
+	}
+	r.lc.PushBack(node)
 
 	// We don't know the ID of all nodes.
 	if !bogusId(node.id) {
@@ -305,6 +318,16 @@ func (r *routingTable) addNewNeighbor(n *remoteNode, displaceBoundary bool, prot
 	log.V(4).Infof("New neighbor added %s with proximity %d", nettools.BinaryToDottedPort(n.addressBinaryFormat), r.proximity)
 }
 
+func (r *routingTable) PopLeft() *remoteNode{
+	el := r.lc.Front();
+	if el != nil {
+		result := el.Value.(*remoteNode)
+		r.lc.Remove(el)
+		return result;
+	}
+	return nil
+}
+
 // pingSlowly pings the remote nodes in needPing, distributing the pings
 // throughout an interval of cleanupPeriod, to avoid network traffic bursts. It
 // doesn't really send the pings, but signals to the main goroutine that it
@@ -324,6 +347,7 @@ func pingSlowly(pingRequest chan *remoteNode, needPing []*remoteNode, cleanupPer
 		}
 	}
 }
+
 
 var (
 	// totalKilledNodes is a monotonically increasing counter of times nodes were killed from

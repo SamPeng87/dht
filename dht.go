@@ -313,11 +313,9 @@ func (d *DHT) findNode(id string) {
 }
 
 func (d *DHT) autoFindNode(id string){
-	front := d.routingTable.addresses.GetBack();
-	if front != nil {
-		node := front.(*remoteNode)
-		d.findNodeFrom(node,id);
-		d.routingTable.kill(node,d.peerStore)
+	r := d.routingTable.PopLeft();
+	if r != nil {
+		d.findNodeFrom(r,id);
 	}
 }
 
