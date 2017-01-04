@@ -42,6 +42,7 @@ type routingTable struct {
 }
 func (r *routingTable) registerLruCacheCallback(p *peerStore){
 	r.addresses.OnEvicted = func(key lru.Key,v interface{}){
+		log.V(2).Infof("LRU: has OnEvicted")
 		r.kill(v,p)
 	}
 }
@@ -226,17 +227,18 @@ func (r *routingTable) cleanup(cleanupPeriod time.Duration, p *peerStore) (needP
 			if len(n.pendingQueries) == 0 {
 				goto PING
 			}
-			// Tolerate 2 cleanup cycles.
-			if time.Since(n.lastResponseTime) > cleanupPeriod*2+(cleanupPeriod/15) {
+
+			 //Tolerate 2 cleanup cycles.
+			if time.Since(n.lastResponseTime) > time.Hour {
 				log.V(4).Infof("DHT: Old node seen %v ago. Deleting", time.Since(n.lastResponseTime))
 				r.kill(n, p)
 				continue
 			}
+
 			if time.Since(n.lastResponseTime).Nanoseconds() < cleanupPeriod.Nanoseconds()/2 {
 				// Seen recently. Don't need to ping.
 				continue
 			}
-
 		} else {
 			// Not reachable.
 			if len(n.pendingQueries) > maxNodePendingQueries {
