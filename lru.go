@@ -72,7 +72,7 @@ func (c *Cache) Add(key CacheKey, value interface{}) {
 	}
 }
 func (c *Cache) GetFront()interface{}{
-	return c.ll.Front();
+	return c.ll.Front().Value.(*entry).value;
 }
 
 // Get looks up a key's value from the cache.
