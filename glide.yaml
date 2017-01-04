@@ -1,0 +1,8 @@
+package: dht
+import:
+- package: github.com/golang/glog
+- package: github.com/golang/groupcache
+  subpackages:
+  - lru
+- package: github.com/jackpal/bencode-go
+- package: github.com/nictuku/nettools
