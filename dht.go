@@ -499,6 +499,7 @@ func (d *DHT) loop() {
 			}
 		case <-checkTicker:
 			if d.needMoreNodes(){
+				totalAutoFind.Add(1)
 				d.findNode(d.nodeId)
 			}
 		case node := <-d.pingRequest:
@@ -1114,4 +1115,5 @@ var (
 	totalDroppedPackets          = expvar.NewInt("totalDroppedPackets")
 	totalRecv                    = expvar.NewInt("totalRecv")
 	totalRecvAnnounce            = expvar.NewInt("totalRecvAnnounce")
+	totalAutoFind                = expvar.NewInt("totalAutoFind")
 )
