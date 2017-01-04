@@ -91,8 +91,12 @@ type Config struct {
 	// ThrottlerTrackedClients is the number of hosts the client throttler remembers. An LRU is used to
 	// track the most interesting ones. Default value: 1000.
 	ThrottlerTrackedClients int64
+
 	//Protocol for UDP connections, udp4= IPv4, udp6 = IPv6
 	UDPProto string
+
+	//auto find period.Default value 10s
+	AutoFindPeriod time.Duration
 }
 
 // Creates a *Config populated with default values.
@@ -112,6 +116,7 @@ func NewConfig() *Config {
 		ClientPerMinuteLimit:    50,
 		ThrottlerTrackedClients: 1000,
 		UDPProto:                "udp4",
+		AutoFindPeriod:		10 * time.Second,
 	}
 }
 
@@ -390,6 +395,7 @@ func (d *DHT) loop() {
 
 	cleanupTicker := time.Tick(d.config.CleanupPeriod)
 	secretRotateTicker := time.Tick(secretRotatePeriod)
+	checkTicker := time.Tick(d.config.AutoFindPeriod)
 
 	saveTicker := make(<-chan time.Time)
 	if d.store != nil {
@@ -491,6 +497,8 @@ func (d *DHT) loop() {
 			if d.needMoreNodes() {
 				d.bootstrap()
 			}
+		case <-checkTicker:
+			d.findNode(d.nodeId)
 		case node := <-d.pingRequest:
 			d.pingNode(node)
 		case <-secretRotateTicker:
