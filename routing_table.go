@@ -123,9 +123,9 @@ func (r *routingTable) update(node *remoteNode, proto string) error {
 	}
 	if node.id != "" {
 		r.nTree.insert(node)
+		totalNodes.Add(1)
 		ln,_ := r.addresses.Get(addr)
 		ln.(remoteNode).id = node.id;
-		totalNodes.Set(len(r.addressesMap))
 	}
 	return nil
 }
@@ -157,7 +157,7 @@ func (r *routingTable) insert(node *remoteNode, proto string) error {
 	if !bogusId(node.id) {
 		// recursive version of node insertion.
 		r.nTree.insert(node)
-		totalNodes.Set(len(r.addressesMap))
+		totalNodes.Add(1)
 	}
 	return nil
 }
