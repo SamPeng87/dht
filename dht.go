@@ -184,7 +184,6 @@ func New(config *Config) (node *DHT, err error) {
 	cfg := *config
 	node = &DHT{
 		config:               cfg,
-		routingTable:         newRoutingTable(),
 		peerStore:            newPeerStore(cfg.MaxInfoHashes, cfg.MaxInfoHashPeers),
 		PeersRequestResults:  make(chan map[InfoHash][]string, 1),
 		stop:                 make(chan bool),
@@ -199,6 +198,9 @@ func New(config *Config) (node *DHT, err error) {
 		clientThrottle: nettools.NewThrottler(cfg.ClientPerMinuteLimit, cfg.ThrottlerTrackedClients),
 		tokenSecrets:   []string{newTokenSecret(), newTokenSecret()},
 	}
+
+	node.routingTable=newRoutingTable(cfg.MaxNodes,node.peerStore)
+
 	c := openStore(cfg.Port, cfg.SaveRoutingTable)
 	node.store = c
 	if len(c.Id) != 20 {

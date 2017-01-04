@@ -8,16 +8,21 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/nictuku/nettools"
+	"github.com/golang/groupcache/lru"
 )
 
-func newRoutingTable() *routingTable {
-	return &routingTable{
+func newRoutingTable(maxData int,p *peerStore) *routingTable {
+	result := &routingTable{
 		&nTree{},
 		make(map[string]*remoteNode),
+		lru.New(maxData),
 		"",
 		nil,
 		0,
 	}
+	result.registerLruCacheCallback(p)
+
+	return result
 }
 
 type routingTable struct {
@@ -26,13 +31,19 @@ type routingTable struct {
 	// remoteNodes. A string is used because it's not possible to create
 	// a map using net.UDPAddr
 	// as a key.
-	addresses map[string]*remoteNode
+	addressesMap map[string]*remoteNode
+	addresses lru.Cache
 
 	// Neighborhood.
 	nodeId       string // This shouldn't be here. Move neighborhood upkeep one level up?
 	boundaryNode *remoteNode
 	// How many prefix bits are shared between boundaryNode and nodeId.
 	proximity int
+}
+func (r *routingTable) registerLruCacheCallback(p *peerStore){
+	r.addresses.OnEvicted = func(key lru.Key,v interface{}){
+		r.kill(v,p)
+	}
 }
 
 // hostPortToNode finds a node based on the specified hostPort specification,
@@ -48,7 +59,7 @@ func (r *routingTable) hostPortToNode(hostPort string, port string) (node *remot
 	if address.String() == "" {
 		return nil, "", false, fmt.Errorf("programming error: address resolution for hostPortToNode returned an empty string")
 	}
-	n, existed := r.addresses[address.String()]
+	n,existed:=r.addresses.Get(address.String())
 	if existed && n == nil {
 		return nil, "", false, fmt.Errorf("programming error: hostPortToNode found nil node in address table")
 	}
@@ -61,7 +72,7 @@ func (r *routingTable) length() int {
 
 func (r *routingTable) reachableNodes() (tbl map[string][]byte) {
 	tbl = make(map[string][]byte)
-	for addr, r := range r.addresses {
+	for addr, r := range r.addressesMap {
 		if addr == "" {
 			log.V(3).Infof("reachableNodes: found empty address for node %x.", r.id)
 			continue
@@ -113,7 +124,8 @@ func (r *routingTable) update(node *remoteNode, proto string) error {
 	if node.id != "" {
 		r.nTree.insert(node)
 		totalNodes.Add(1)
-		r.addresses[addr].id = node.id
+		ln,_ := r.addresses.Get(addr)
+		ln.(remoteNode).id = node.id;
 	}
 	return nil
 }
@@ -138,7 +150,9 @@ func (r *routingTable) insert(node *remoteNode, proto string) error {
 	if existed {
 		return nil // fmt.Errorf("node already existed in routing table: %v", node.address.String())
 	}
-	r.addresses[addr] = node
+	r.addresses.Add(addr,node)
+	r.addressesMap[addr] = node
+
 	// We don't know the ID of all nodes.
 	if !bogusId(node.id) {
 		// recursive version of node insertion.
@@ -169,7 +183,9 @@ func (r *routingTable) getOrCreateNode(id string, hostPort string, proto string)
 }
 
 func (r *routingTable) kill(n *remoteNode, p *peerStore) {
-	delete(r.addresses, n.address.String())
+	delete(r.addressesMap, n.address.String())
+	r.addresses.Remove(n.address.String())
+
 	r.nTree.cut(InfoHash(n.id), 0)
 	totalKilledNodes.Add(1)
 
@@ -195,7 +211,7 @@ func (r *routingTable) cleanup(cleanupPeriod time.Duration, p *peerStore) (needP
 	needPing = make([]*remoteNode, 0, 10)
 	t0 := time.Now()
 	// Needs some serious optimization.
-	for addr, n := range r.addresses {
+	for addr, n := range r.addressesMap {
 		if addr != n.address.String() {
 			log.V(3).Infof("cleanup: node address mismatches: %v != %v. Deleting node", addr, n.address.String())
 			r.kill(n, p)
