@@ -1,2 +1,2 @@
-glide-install:
+glide-installOrUpdate:
 	glide install
