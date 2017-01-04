@@ -8,14 +8,13 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/nictuku/nettools"
-	"github.com/golang/groupcache/lru"
 )
 
 func newRoutingTable(maxData int,p *peerStore) *routingTable {
 	result := &routingTable{
 		&nTree{},
 		make(map[string]*remoteNode),
-		lru.New(maxData),
+		NewCache(maxData),
 		"",
 		nil,
 		0,
@@ -32,7 +31,7 @@ type routingTable struct {
 	// a map using net.UDPAddr
 	// as a key.
 	addressesMap map[string]*remoteNode
-	addresses *lru.Cache
+	addresses *Cache
 
 	// Neighborhood.
 	nodeId       string // This shouldn't be here. Move neighborhood upkeep one level up?
@@ -41,7 +40,7 @@ type routingTable struct {
 	proximity int
 }
 func (r *routingTable) registerLruCacheCallback(p *peerStore){
-	r.addresses.OnEvicted = func(key lru.Key,v interface{}){
+	r.addresses.OnEvicted = func(key CacheKey,v interface{}){
 		log.V(2).Infof("Kill node 1")
 		r.kill(v.(*remoteNode),p)
 	}

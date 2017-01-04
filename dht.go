@@ -312,6 +312,13 @@ func (d *DHT) findNode(id string) {
 	}
 }
 
+func (d *DHT) autoFindNode(id string){
+	front := d.routingTable.addresses.GetFront();
+	if front != nil {
+		d.findNodeFrom(front.(*remoteNode),id);
+	}
+}
+
 // Start launches the dht node. It starts a listener
 // on the desired address, then runs the main loop in a
 // separate go routine - Start replaces Run and will
@@ -502,7 +509,7 @@ func (d *DHT) loop() {
 			//}
 		case <-checkTicker:
 			if d.needMoreNodes(){
-				d.findNode(d.nodeId)
+				d.autoFindNode(d.nodeId)
 			}
 		case node := <-d.pingRequest:
 			d.pingNode(node)
@@ -1079,14 +1086,14 @@ func (d *DHT) processFindNodeResults(node *remoteNode, resp responseType) {
 					continue
 				}
 				//if d.needMoreNodes() {
-				//select {
-				//case d.nodesRequest <- ihReq{query.ih, true}:
-				//default:
-					// Too many find_node commands queued up. Dropping
-					// this. The node has already been added to the
-					// routing table so we're not losing any
-					// information.
-				//}
+				select {
+				case d.nodesRequest <- ihReq{query.ih, true}:
+				default:
+					 //Too many find_node commands queued up. Dropping
+					 //this. The node has already been added to the
+					 //routing table so we're not losing any
+					 //information.
+				}
 				d.getMorePeers(r)
 			}
 		}
