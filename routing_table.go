@@ -186,6 +186,7 @@ func (r *routingTable) getOrCreateNode(id string, hostPort string, proto string)
 	return node, r.insert(node, proto)
 }
 
+
 func (r *routingTable) kill(n *remoteNode, p *peerStore) {
 	delete(r.addressesMap, n.address.String())
 	r.addresses.Remove(n.address.String())

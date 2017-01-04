@@ -71,10 +71,8 @@ func (c *Cache) Add(key CacheKey, value interface{}) {
 		c.RemoveOldest()
 	}
 }
-func (c *Cache) PopFront()interface{}{
-	back := c.ll.Back()
-	r := c.ll.Remove(back)
-	return r.(*entry).value;
+func (c *Cache) GetBack()interface{}{
+	return c.ll.Back().Value.(*entry).value;
 }
 
 // Get looks up a key's value from the cache.
