@@ -498,7 +498,9 @@ func (d *DHT) loop() {
 				d.bootstrap()
 			}
 		case <-checkTicker:
-			d.findNode(d.nodeId)
+			if d.needMoreNodes(){
+				d.findNode(d.nodeId)
+			}
 		case node := <-d.pingRequest:
 			d.pingNode(node)
 		case <-secretRotateTicker:
