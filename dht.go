@@ -520,7 +520,7 @@ func (d *DHT) loop() {
 
 func (d *DHT) needMoreNodes() bool {
 	n := d.routingTable.numNodes()
-	return n < minNodes || n*2 < d.config.MaxNodes
+	return n < minNodes || n < d.config.MaxNodes
 }
 
 func (d *DHT) needMorePeers(ih InfoHash) bool {
