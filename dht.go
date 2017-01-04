@@ -296,6 +296,7 @@ func (d *DHT) getPeers(infoHash InfoHash) {
 func (d *DHT) findNode(id string) {
 	ih := InfoHash(id)
 	closest := d.routingTable.lookupFiltered(ih)
+	log.V(1).Infof("find Node count:", len(closest))
 	if len(closest) == 0 {
 		for _, s := range strings.Split(d.config.DHTRouters, ",") {
 			if s != "" {
@@ -496,12 +497,11 @@ func (d *DHT) loop() {
 				defer d.wg.Done()
 				pingSlowly(d.pingRequest, needPing, d.config.CleanupPeriod, d.stop)
 			}()
-			if d.needMoreNodes() {
-				d.bootstrap()
-			}
+			//if d.needMoreNodes() {
+			//	d.bootstrap()
+			//}
 		case <-checkTicker:
 			if d.needMoreNodes(){
-				totalAutoFind.Add(1)
 				d.findNode(d.nodeId)
 			}
 		case node := <-d.pingRequest:
@@ -622,10 +622,10 @@ func (d *DHT) processPacket(p packetType) {
 
 			// If this is the first host added to the routing table, attempt a
 			// recursive lookup of our own address, to build our neighborhood ASAP.
-			if d.needMoreNodes() {
-				log.V(5).Infof("DHT: need more nodes")
-				d.findNode(d.nodeId)
-			}
+			//if d.needMoreNodes() {
+			//	log.V(5).Infof("DHT: need more nodes")
+			//	d.findNode(d.nodeId)
+			//}
 			d.exploredNeighborhood = true
 
 			switch query.Type {
@@ -744,9 +744,9 @@ func (d *DHT) findNodeFrom(r *remoteNode, id string) {
 		"target": id,
 	}
 	query := queryMessage{transId, "q", ty, queryArguments}
-	if log.V(3) {
+	if log.V(1) {
 		x := hashDistance(InfoHash(r.id), ih)
-		log.V(3).Infof("DHT sending find_node. nodeID: %x@%v, target ID: %x , distance: %x", r.id, r.address, id, x)
+		log.V(1).Infof("DHT sending find_node. nodeID: %x@%v, target ID: %x , distance: %x", r.id, r.address, id, x)
 	}
 	r.lastSearchTime = time.Now()
 	sendMsg(d.conn, r.address, query)
@@ -802,6 +802,7 @@ func (d *DHT) replyAnnouncePeer(addr net.UDPAddr, node *remoteNode, r responseTy
 	}
 	// node can be nil if, for example, the server just restarted and received an announce_peer
 	// from a node it doesn't yet know about.
+	totalRecvAnnounce.Add(1)
 	if node != nil && d.checkToken(addr, r.A.Token) {
 		peerAddr := net.TCPAddr{IP: addr.IP, Port: r.A.Port}
 		d.peerStore.addContact(ih, nettools.DottedPortToBinary(peerAddr.String()))
@@ -810,8 +811,8 @@ func (d *DHT) replyAnnouncePeer(addr net.UDPAddr, node *remoteNode, r responseTy
 		// "peer" of an infohash, if the announcement is valid.
 		node.lastResponseTime = time.Now().Add(-searchRetryPeriod)
 		//if d.peerStore.hasLocalDownload(ih) {
+		totalRecvVaildAnnounce.Add(1)
 		d.PeersRequestResults <- map[InfoHash][]string{ih: []string{nettools.DottedPortToBinary(peerAddr.String())}}
-		totalRecvAnnounce.Add(1)
 		//}
 	}
 	// Always reply positively. jech says this is to avoid "back-tracking", not sure what that means.
@@ -836,6 +837,9 @@ func (d *DHT) replyGetPeers(addr net.UDPAddr, r responseType) {
 
 	ih := r.A.InfoHash
 	r0 := map[string]interface{}{"id": d.nodeId, "token": d.hostToken(addr, d.tokenSecrets[0])}
+
+	d.PeersRequestResults <- map[InfoHash][]string{InfoHash(ih): []string{nettools.DottedPortToBinary(addr.String())}}
+
 	reply := replyMessage{
 		T: r.T,
 		Y: "r",
@@ -1074,16 +1078,15 @@ func (d *DHT) processFindNodeResults(node *remoteNode, resp responseType) {
 					log.Warningf("processFindNodeResults calling getOrCreateNode: %v. Id=%x, Address=%q", err, id, addr)
 					continue
 				}
-				if d.needMoreNodes() {
-					select {
-					case d.nodesRequest <- ihReq{query.ih, false}:
-					default:
-						// Too many find_node commands queued up. Dropping
-						// this. The node has already been added to the
-						// routing table so we're not losing any
-						// information.
-					}
-				}
+				//if d.needMoreNodes() {
+				//select {
+				//case d.nodesRequest <- ihReq{query.ih, true}:
+				//default:
+					// Too many find_node commands queued up. Dropping
+					// this. The node has already been added to the
+					// routing table so we're not losing any
+					// information.
+				//}
 				d.getMorePeers(r)
 			}
 		}
@@ -1116,5 +1119,5 @@ var (
 	totalDroppedPackets          = expvar.NewInt("totalDroppedPackets")
 	totalRecv                    = expvar.NewInt("totalRecv")
 	totalRecvAnnounce            = expvar.NewInt("totalRecvAnnounce")
-	totalAutoFind                = expvar.NewInt("totalAutoFind")
+	totalRecvVaildAnnounce       = expvar.NewInt("totalRecvVaildAnnounce")
 )

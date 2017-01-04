@@ -50,7 +50,7 @@ const (
 	kNodes = 8
 	// Consider a node stale if it has more than this number of oustanding
 	// queries from us.
-	maxNodePendingQueries = 50
+	maxNodePendingQueries = 300
 )
 
 // recursive version of node insertion.
@@ -145,6 +145,7 @@ func (n *nTree) traverse(id InfoHash, i int, ret []*remoteNode, filter bool) []*
 	}
 	if n.value != nil {
 		if !filter || n.isOK(id) {
+		        log.V(1).Infof("TEST is OK. nodeID: %x", n.value.id)
 			return append(ret, n.value)
 		}
 	}
@@ -213,7 +214,7 @@ func (n *nTree) isOK(ih InfoHash) bool {
 	r := n.value
 
 	if len(r.pendingQueries) > maxNodePendingQueries {
-		log.V(3).Infof("DHT: Skipping because there are too many queries pending for this dude.%d",len(r.pendingQueries))
+		log.V(1).Infof("DHT: Skipping because there are too many queries pending for this dude.%d",len(r.pendingQueries))
 		log.V(3).Infof("DHT: This shouldn't happen because we should have stopped trying already. Might be a BUG.")
 		return false
 	}

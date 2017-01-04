@@ -32,7 +32,7 @@ type routingTable struct {
 	// a map using net.UDPAddr
 	// as a key.
 	addressesMap map[string]*remoteNode
-	addresses lru.Cache
+	addresses *lru.Cache
 
 	// Neighborhood.
 	nodeId       string // This shouldn't be here. Move neighborhood upkeep one level up?
@@ -42,8 +42,8 @@ type routingTable struct {
 }
 func (r *routingTable) registerLruCacheCallback(p *peerStore){
 	r.addresses.OnEvicted = func(key lru.Key,v interface{}){
-		log.V(2).Infof("LRU: has OnEvicted")
-		r.kill(v,p)
+		log.V(2).Infof("Kill node 1")
+		r.kill(v.(*remoteNode),p)
 	}
 }
 
@@ -64,11 +64,15 @@ func (r *routingTable) hostPortToNode(hostPort string, port string) (node *remot
 	if existed && n == nil {
 		return nil, "", false, fmt.Errorf("programming error: hostPortToNode found nil node in address table")
 	}
-	return n, address.String(), existed, nil
+	if existed {
+		return n.(*remoteNode), address.String(), existed, nil
+	}else{
+		return nil, address.String(), false, nil
+	}
 }
 
 func (r *routingTable) length() int {
-	return len(r.addresses)
+	return len(r.addressesMap)
 }
 
 func (r *routingTable) reachableNodes() (tbl map[string][]byte) {
@@ -96,7 +100,7 @@ func (r *routingTable) reachableNodes() (tbl map[string][]byte) {
 }
 
 func (r *routingTable) numNodes() int {
-	return len(r.addresses)
+	return len(r.addressesMap)
 }
 
 func isValidAddr(addr string) bool {
@@ -126,7 +130,7 @@ func (r *routingTable) update(node *remoteNode, proto string) error {
 		r.nTree.insert(node)
 		totalNodes.Add(1)
 		ln,_ := r.addresses.Get(addr)
-		ln.(remoteNode).id = node.id;
+		ln.(*remoteNode).id = node.id;
 	}
 	return nil
 }
@@ -215,11 +219,13 @@ func (r *routingTable) cleanup(cleanupPeriod time.Duration, p *peerStore) (needP
 	for addr, n := range r.addressesMap {
 		if addr != n.address.String() {
 			log.V(3).Infof("cleanup: node address mismatches: %v != %v. Deleting node", addr, n.address.String())
+			log.V(2).Infof("Kill node 2")
 			r.kill(n, p)
 			continue
 		}
 		if addr == "" {
 			log.V(3).Infof("cleanup: found empty address for node %x. Deleting node", n.id)
+			log.V(2).Infof("Kill node 3")
 			r.kill(n, p)
 			continue
 		}
@@ -231,6 +237,7 @@ func (r *routingTable) cleanup(cleanupPeriod time.Duration, p *peerStore) (needP
 			 //Tolerate 2 cleanup cycles.
 			if time.Since(n.lastResponseTime) > time.Hour {
 				log.V(4).Infof("DHT: Old node seen %v ago. Deleting", time.Since(n.lastResponseTime))
+				log.V(2).Infof("Kill node 4")
 				r.kill(n, p)
 				continue
 			}
@@ -243,7 +250,8 @@ func (r *routingTable) cleanup(cleanupPeriod time.Duration, p *peerStore) (needP
 			// Not reachable.
 			if len(n.pendingQueries) > maxNodePendingQueries {
 				// Didn't reply to 2 consecutive queries.
-				log.V(4).Infof("DHT: Node never replied to ping. Deleting. %v", n.address)
+				log.V(3).Infof("DHT: Node never replied to ping. Deleting. %v", n.address)
+				log.V(2).Infof("Kill node 5")
 				r.kill(n, p)
 				continue
 			}
@@ -289,6 +297,7 @@ func (r *routingTable) addNewNeighbor(n *remoteNode, displaceBoundary bool, prot
 	}
 	if displaceBoundary && r.boundaryNode != nil {
 		// This will also take care of setting a new boundary.
+		log.V(2).Infof("Kill node 6")
 		r.kill(r.boundaryNode, p)
 	} else {
 		r.resetNeighborhoodBoundary()
